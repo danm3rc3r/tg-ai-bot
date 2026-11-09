@@ -9,12 +9,18 @@ from __future__ import annotations
 import logging
 import time
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from .bot import Stats
-from .config import MAX_INPUT_CHARS, SUMMARIZE_PROMPT, BotConfig
+from .config import (
+    ACCEPTED_DOC_MIME,
+    MAX_DOC_BYTES,
+    MAX_INPUT_CHARS,
+    SUMMARIZE_PROMPT,
+    BotConfig,
+)
 from .llm import GenerationResult, OllamaBadOutput, OllamaClient, OllamaError
 
 _log = logging.getLogger("tg_ai_bot")
@@ -81,11 +87,34 @@ def build_router(cfg: BotConfig, llm: OllamaClient, stats: Stats) -> Router:
             return
         await _summarize(message, source="text", text=text)
 
+    async def handle_document(message: Message, bot: Bot) -> None:
+        """Validate a .txt document (mime, extension, size), download, summarize."""
+        doc = message.document
+        if (
+            doc is None
+            or doc.mime_type != ACCEPTED_DOC_MIME
+            or not (doc.file_name or "").lower().endswith(".txt")
+        ):
+            await message.answer("I can only read .txt documents.")
+            return
+        if doc.file_size and doc.file_size > MAX_DOC_BYTES:
+            await message.answer("File is too large (max 1 MB).")
+            return
+        data = await bot.download(doc)  # wrapper: -> io.BytesIO (04c section 4.5)
+        raw = data.read()
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            await message.answer("couldn't read this file (UTF-8 txt only)")
+            return
+        await _summarize(message, source="doc", text=text, size=len(raw))
+
     async def handle_fallback(message: Message) -> None:
         await message.answer("I summarize text or .txt files. Send /help.")
 
     r.message.register(command_start, CommandStart())
     r.message.register(command_help, Command("help"))
     r.message.register(handle_text, F.text)  # the "/..." guard lives inside
+    r.message.register(handle_document, F.document)  # txt-only guards inside
     r.message.register(handle_fallback)  # stickers/photos/etc. -> "send /help"
     return r
