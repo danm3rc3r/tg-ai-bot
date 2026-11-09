@@ -10,6 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramUnauthorizedError
 
 from .config import BotConfig
+from .limits import RateLimiter
 from .llm import OllamaClient
 
 _log = logging.getLogger("tg_ai_bot")
@@ -52,9 +53,10 @@ async def run_bot(cfg: BotConfig) -> None:
 
     bot = Bot(token=cfg.bot_token)
     llm = OllamaClient(cfg.ollama_base_url, cfg.timeout_s)
+    limiter = RateLimiter(cfg.max_per_hour)
     stats = Stats()
     dp = Dispatcher()
-    dp.include_router(build_router(cfg, llm, stats))
+    dp.include_router(build_router(cfg, llm, limiter, stats))
     _log.info(
         "config ok: owner=%d model=%s limit=%d/h base=%s",
         cfg.owner_id,
