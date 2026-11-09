@@ -9,9 +9,19 @@ import os
 import sys
 
 from .bot import run_bot
-from .config import _TOKEN_RE, BotConfig, ConfigError, mask_token
+from .config import (
+    _TOKEN_RE,
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
+    BotConfig,
+    ConfigError,
+    mask_token,
+)
+from .llm import OllamaClient
 
 _log = logging.getLogger("tg_ai_bot")
+
+PREFLIGHT_TIMEOUT_S = 10.0
 
 
 def _parse() -> argparse.Namespace:
@@ -36,9 +46,9 @@ def _setup_logging(verbose: bool) -> None:
 
 
 def _preflight() -> int:
-    """Stage S1 preflight: BOT_TOKEN presence and shape (exit 0 | 2).
+    """Stage S2 preflight: token, Ollama reachability, model presence (exit 0 | 1 | 2).
 
-    The Ollama and model sections join at stage S2 (exit 0 | 1 | 2).
+    2 - token missing/placeholder; 1 - Ollama unreachable or model absent; 0 - all ok.
     """
     token = (os.environ.get("BOT_TOKEN") or "").strip()
     if not token:
@@ -49,7 +59,23 @@ def _preflight() -> int:
               file=sys.stderr)
         return 2
     print(f"[token] ok ({mask_token(token)} )", file=sys.stderr)
-    return 0
+
+    base_url = (os.environ.get("OLLAMA_BASE_URL") or DEFAULT_OLLAMA_BASE_URL).rstrip("/")
+    model = os.environ.get("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL
+    client = OllamaClient(base_url, timeout=PREFLIGHT_TIMEOUT_S)
+    try:
+        if not client.is_available():
+            print(f"[ollama] not reachable at {base_url} (connection error or timeout)",
+                  file=sys.stderr)
+            return 1
+        print(f"[ollama] reachable at {base_url}", file=sys.stderr)
+        if client.model_present(model):
+            print(f"[model] present: {model}", file=sys.stderr)
+            return 0
+        print(f"[model] absent: {model} (run: ollama pull {model})", file=sys.stderr)
+        return 1
+    finally:
+        client.close()
 
 
 def main() -> None:

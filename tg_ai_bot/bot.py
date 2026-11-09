@@ -10,6 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramUnauthorizedError
 
 from .config import BotConfig
+from .llm import OllamaClient
 
 _log = logging.getLogger("tg_ai_bot")
 
@@ -50,9 +51,10 @@ async def run_bot(cfg: BotConfig) -> None:
     from .handlers import build_router
 
     bot = Bot(token=cfg.bot_token)
+    llm = OllamaClient(cfg.ollama_base_url, cfg.timeout_s)
     stats = Stats()
     dp = Dispatcher()
-    dp.include_router(build_router(cfg, stats))
+    dp.include_router(build_router(cfg, llm, stats))
     _log.info(
         "config ok: owner=%d model=%s limit=%d/h base=%s",
         cfg.owner_id,
@@ -65,3 +67,5 @@ async def run_bot(cfg: BotConfig) -> None:
     except TelegramUnauthorizedError:
         _log.error("bot token rejected by Telegram (check BOT_TOKEN)")
         raise SystemExit(2)
+    finally:
+        llm.close()
