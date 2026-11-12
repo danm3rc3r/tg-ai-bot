@@ -10,7 +10,13 @@ from io import BytesIO
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tg_ai_bot.bot import Stats
-from tg_ai_bot.config import MAX_INPUT_CHARS, BotConfig, ConfigError, mask_token
+from tg_ai_bot.config import (
+    MAX_INPUT_CHARS,
+    BotConfig,
+    ConfigError,
+    mask_proxy,
+    mask_token,
+)
 from tg_ai_bot.handlers import build_router
 from tg_ai_bot.limits import RateLimiter
 from tg_ai_bot.llm import GenerationResult, OllamaBadOutput, OllamaClient, OllamaError
@@ -29,6 +35,16 @@ for bad in ({}, {"BOT_TOKEN": "123456:placeholder", "OWNER_ID": "1"},
     except ConfigError:
         pass
 assert mask_token("123456:" + "A" * 35) == "123456:***"
+# TELEGRAM_PROXY: absent -> "", set -> stripped value; mask_proxy hides credentials (AC-8)
+assert cfg.telegram_proxy == ""
+proxy_env = {
+    "BOT_TOKEN": "123456:" + "f" * 30,
+    "OWNER_ID": "1",
+    "TELEGRAM_PROXY": "  http://127.0.0.1:10809  ",
+}
+assert BotConfig.from_env(proxy_env).telegram_proxy == "http://127.0.0.1:10809"
+assert mask_proxy("http://user:pass@proxy:1080") == "http://***@proxy:1080"
+assert mask_proxy("http://127.0.0.1:10809") == "http://127.0.0.1:10809"
 print("config ok")
 
 # ---- rate limiter -------------------------------------------------------------

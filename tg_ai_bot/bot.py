@@ -7,9 +7,10 @@ import time
 from dataclasses import dataclass, field
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramUnauthorizedError
 
-from .config import BotConfig
+from .config import BotConfig, mask_proxy
 from .limits import RateLimiter
 from .llm import OllamaClient
 
@@ -51,7 +52,8 @@ async def run_bot(cfg: BotConfig) -> None:
     # Imported here (not at module top) because handlers imports Stats from this module.
     from .handlers import build_router
 
-    bot = Bot(token=cfg.bot_token)
+    session = AiohttpSession(proxy=cfg.telegram_proxy) if cfg.telegram_proxy else None
+    bot = Bot(token=cfg.bot_token, session=session)
     llm = OllamaClient(cfg.ollama_base_url, cfg.timeout_s)
     limiter = RateLimiter(cfg.max_per_hour)
     stats = Stats()
@@ -64,6 +66,8 @@ async def run_bot(cfg: BotConfig) -> None:
         cfg.max_per_hour,
         cfg.ollama_base_url,
     )
+    if cfg.telegram_proxy:
+        _log.info(f"telegram proxy: {mask_proxy(cfg.telegram_proxy)}")
     try:
         await dp.start_polling(bot)
     except TelegramUnauthorizedError:

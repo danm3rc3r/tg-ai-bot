@@ -58,6 +58,7 @@ tg-ai-bot:
 | `MAX_PER_HOUR` | no | `10` | summaries per user per hour (non-admin) |
 | `SUMMARY_MAX_CHARS` | no | `500` | |
 | `OLLAMA_TIMEOUT_S` | no | `120` | |
+| `TELEGRAM_PROXY` | no | - | optional http/socks proxy for Telegram API calls (aiohttp does not use the system proxy); credentials masked in logs |
 
 The token is read from `.env` only and never printed in full (logs show `123456:***`).
 

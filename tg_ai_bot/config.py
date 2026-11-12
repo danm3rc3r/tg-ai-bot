@@ -40,6 +40,7 @@ class BotConfig:
     max_per_hour: int = DEFAULT_MAX_PER_HOUR
     summary_max_chars: int = DEFAULT_SUMMARY_MAX_CHARS
     timeout_s: float = DEFAULT_TIMEOUT_S
+    telegram_proxy: str = ""
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> BotConfig:
@@ -62,6 +63,7 @@ class BotConfig:
                 e.get("SUMMARY_MAX_CHARS"), DEFAULT_SUMMARY_MAX_CHARS
             ),
             timeout_s=float(e.get("OLLAMA_TIMEOUT_S") or DEFAULT_TIMEOUT_S),
+            telegram_proxy=(e.get("TELEGRAM_PROXY") or "").strip(),
         )
 
 
@@ -78,3 +80,11 @@ def mask_token(token: str) -> str:
     """Mask a bot token for logs: keep the numeric id, drop the secret (123456:***)."""
     head, _, _secret = token.partition(":")
     return f"{head}:***"
+
+
+def mask_proxy(url: str) -> str:
+    """Mask proxy credentials for logs: http://user:pass@host:port -> http://***@host:port."""
+    scheme, sep, tail = url.partition("://")
+    if not sep or "@" not in tail:
+        return url
+    return scheme + "://***@" + tail.rsplit("@", 1)[1]
